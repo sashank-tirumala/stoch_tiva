@@ -45,9 +45,9 @@
 
 
 volatile long motor_counter=0;
-volatile uint32_t ui32Load;
-volatile uint32_t ui32PWMClock;
-volatile int phase[]={0,50,50,0};
+//volatile uint32_t ui32Load;
+//volatile uint32_t ui32PWMClock;
+//volatile int phase[]={0,50,50,0};
 volatile char rxchar[10];
 volatile float valuerx=0;
 volatile int startrx=0,startrx2=0;
@@ -67,15 +67,18 @@ volatile float reference[]={0,4300,11000,11433,4300,11000,6100,4300,11000,11433,
 inline void enHigh(){GPIOPinWrite(GPIO_PORTB_BASE,GPIO_PIN_5, GPIO_PIN_5);}
 inline void enLow(){GPIOPinWrite(GPIO_PORTB_BASE,GPIO_PIN_5, 0);}
 
+
+//volatile int flag_FR_turn=0;
+//volatile int flag_FL_turn=0;
+//volatile int flag_BR_turn=0;
+//volatile int flag_BL_turn=0;
+
+
 volatile int startwalking_flag=0;
 volatile int begin_flag=0;
 volatile int flag=1;
 volatile int counterrx=-1;
 volatile int timer_count=0;
-//volatile int flag_FR_turn=0;
-//volatile int flag_FL_turn=0;
-//volatile int flag_BR_turn=0;
-//volatile int flag_BL_turn=0;
 volatile int flag_turn=0;
 volatile int flag_turnr=0;
 volatile int flag_turnl=0;
@@ -622,26 +625,25 @@ void UART0IntHandler(void)
     uint32_t ui32Status;
 
     ui32Status = UARTIntStatus(UART0_BASE, true);
-
     UARTIntClear(UART0_BASE, ui32Status);
     valuerx=0;
     ppp=UARTgets(rxchar,10);
     //UARTprintf("Int\n");
-    if(rxchar[0]=='d'&& startrx==0)
+    if(rxchar[0]=='d'&& startrx==0) // Turn right
     {
         flag_turnr=1;
         abd_multiplier=0;
         //flag_FR_turn=1;
         //flag_BR_turn=1;
     }
-    if(rxchar[0]=='a'&& startrx==0)
+    if(rxchar[0]=='a'&& startrx==0) // Turn left
     {
         flag_turnl=1;
         abd_multiplier=0;
         //flag_FL_turn=1;
         //flag_BL_turn=1;
     }
-    if(rxchar[0]=='u'&& startrx==0)
+    if(rxchar[0]=='u'&& startrx==0) // Stomp
     {
         flag_stomp=1;
         abd_multiplier=0;
@@ -649,7 +651,7 @@ void UART0IntHandler(void)
         //flag_FL_turn=1;
         //flag_BL_turn=1;
     }
-    if(rxchar[0]=='w'&& startrx==0)
+    if(rxchar[0]=='w'&& startrx==0) // Start walking
     {
         startwalking_flag=1;
         loop_delay=loop_delay-1000;
@@ -692,7 +694,7 @@ void UART0IntHandler(void)
         bryoffset=bryoffset-0.001;
     }
 
-    if(rxchar[0]=='Z'&& startrx==0)
+    if(rxchar[0]=='Z'&& startrx==0) // Commence stand-up sequence
     {
         //flag_FR_turn=0;
         //flag_BR_turn=0;
@@ -704,7 +706,7 @@ void UART0IntHandler(void)
         begin_flag=1;
     }
 
-    if(rxchar[0]=='x')
+    if(rxchar[0]=='x') // Gait frequency set-point
     {
         flag=0;
         startrx2=1;
@@ -712,16 +714,25 @@ void UART0IntHandler(void)
     }
 
     if(rxchar[0]=='X'&& startrx==0)
+    {
         loop_delay=0;
-    if(rxchar[0]=='p'&& startrx==0)
+    }
+    if(rxchar[0]=='p'&& startrx==0)// Pause
+    {
         flag=0;
-    if(rxchar[0]=='P'&& startrx==0)
+    }
+    if(rxchar[0]=='P'&& startrx==0) // Resume
+    {
         flag=1;
+    }
     if(rxchar[0]=='C'&& startrx==0)
+    {
         flag_stomp=0;
+    }
     //flag_cal=0;
 
 
+    // Command to receive the trajectories
     if(rxchar[0]=='F')
     {
         counterrx=0;
@@ -730,6 +741,8 @@ void UART0IntHandler(void)
         startrx=1;
         return;
     }
+
+    // Receive the gait frequency set-point
     if(startrx2==1)
     {
         for(jjj=1;jjj<ppp;jjj++)
@@ -743,6 +756,8 @@ void UART0IntHandler(void)
         flag=1;
         startrx2=0;
     }
+
+    // Receive the trajectory points for all the legs (and spine)
     if(startrx==1)
     {
         for(jjj=1;jjj<ppp;jjj++)
@@ -802,11 +817,7 @@ void UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count)
     }
 }
 
-//*****************************************************************************
-//
-// This example demonstrates how to send a string of data to the UART.
-//
-//*****************************************************************************
+
 int main(void)
 {
 
@@ -826,35 +837,12 @@ int main(void)
     int delayf=0;
     //TimerBegin();
 
-    //SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_OSC | SYSCTL_OSC_MAIN |
-    //                   SYSCTL_XTAL_16MHZ);
-
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-    defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-    uint32_t ui32SysClock;
-#endif
-    //
-    // Set the clocking to run at 20 MHz (200 MHz / 10) using the PLL.  When
-    // using the ADC, you must either use the PLL or supply a 16 MHz clock
-    // source.
-    // TODO: The SYSCTL_XTAL_ value must be changed to match the value of the
-    // crystal on your board.
-    //
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-    defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-    ui32SysClock = SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ |
-                SYSCTL_OSC_MAIN |
-                SYSCTL_USE_PLL |
-                SYSCTL_CFG_VCO_480), 20000000);
-#else
-    //    SysCtlClockSet(SYSCTL_SYSDIV_10 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN |
-    //                   SYSCTL_XTAL_16MHZ);   // 20MHz   -- to select different clock, change the clock divider
+    // Set the system clock to 80MHz
     SysCtlClockSet(SYSCTL_SYSDIV_2_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN |
             SYSCTL_XTAL_16MHZ);   // 80MHz
-#endif
 
+
+    // Configure UART1; used for the ICS comm.
     SysCtlPeripheralReset(SYSCTL_PERIPH_UART1);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
     GPIOPinConfigure(GPIO_PB0_U1RX);
@@ -870,12 +858,14 @@ int main(void)
     SysCtlDelay(200);
 
 
+    // Configure the GPIO interface; used in the En pin for ICS
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
     SysCtlDelay(200);
     GPIOPinTypeGPIOOutput(GPIO_PORTB_BASE, GPIO_PIN_5);  // ICS Enable Pin
     SysCtlDelay(200);
     enLow();
 
+    // Configure UART0; used to communicate with the SBC/PC
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
     GPIOPinConfigure(GPIO_PA0_U0RX);
     GPIOPinConfigure(GPIO_PA1_U0TX);
@@ -899,6 +889,7 @@ int main(void)
     UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
     //TimerBegin();
 
+    // Configure GPIO; used for debugging
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
     GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3);
 
