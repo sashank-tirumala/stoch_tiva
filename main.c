@@ -55,6 +55,7 @@ const float slope = (8000/270);
 volatile float q1,q2,q3,q4;
 volatile int motor_hip[]={0,0,0,0,0,0,0,0,0,0,0,0,0};
 volatile int motor_knee[]={0,0,0,0,0,0,0,0,0,0,0,0,0};
+volatile int motor_abd[]={0,0,0,0,0,0,0,0,0,0,0,0,0};
 volatile int actpos[]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 volatile int current[]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 volatile int speed[]={0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -63,7 +64,15 @@ volatile float new_period=5;
 //volatile float reference[]={0,4250,11470,6100,3813,11468,6100,3912,11493,6100,3880,11017,6100};
 //volatile float reference[]={0,4250,11470,6100,3949,11386,6100,3912,11493,6100,4330,10888,6100};
 //volatile float reference[]={0,4208,11470,6100,3873,11487,6100,3883,11493,6100,4343,11091,6100};
-volatile float reference[]={0,4300,11000,11433,4300,11000,6100,4300,11000,11433,4300,11000,6100};
+
+// Use this reference
+//volatile float reference[]={0,4300,11000,11433,4300,11000,6100,4300,11000,11433,4300,11000,6100};
+
+
+// Testing this reference values:
+// FRab[3]-> outer => --
+volatile float reference[]={0,4260,11080,11250,4181,11072,6070,4326,11064,11453,4267,11120,6200};
+
 inline void enHigh(){GPIOPinWrite(GPIO_PORTB_BASE,GPIO_PIN_5, GPIO_PIN_5);}
 inline void enLow(){GPIOPinWrite(GPIO_PORTB_BASE,GPIO_PIN_5, 0);}
 
@@ -85,9 +94,9 @@ volatile int flag_turnl=0;
 volatile int flag_stomp=0;
 volatile int loop_delay=0;
 volatile float blxoffset=0;
-volatile float blyoffset=0;
+volatile float blyoffset=-0.005;// TODO: remove this later if not required
 volatile float brxoffset=0;
-volatile float bryoffset=0;
+volatile float bryoffset=-0.005; // TODO: remove this later if not required
 volatile float flyoffset=0;
 volatile float fryoffset=0;
 volatile float flag_cal=0;
@@ -468,6 +477,20 @@ int getTmp(char id)
     reData = rxCmd[2];
     return reData;
 }
+
+int getPos(char id) {
+    char txCmd[2];
+    char rxCmd[4];
+    unsigned int reData;
+    bool flg;
+
+    txCmd[0] = 0xA0 + id;    // CMD
+    txCmd[1] = 0x05;
+
+    flg = synchronize(txCmd, sizeof txCmd, rxCmd, sizeof rxCmd, id);
+    reData = ((rxCmd[2] << 7) & 0x3F80) + (rxCmd[3] & 0x007F);
+    return reData;
+}
 void inverse_stoch(float x,float y)
 {
     //float Leg[] = {0.12,0.15015,0.04,0.15501,0.11187,0.04,0.2532,2.803};
@@ -632,6 +655,8 @@ void UART0IntHandler(void)
     if(rxchar[0]=='d'&& startrx==0) // Turn right
     {
         flag_turnr=1;
+        flag_turnl=0;
+        flag_stomp=0;
         abd_multiplier=0;
         //flag_FR_turn=1;
         //flag_BR_turn=1;
@@ -639,6 +664,8 @@ void UART0IntHandler(void)
     if(rxchar[0]=='a'&& startrx==0) // Turn left
     {
         flag_turnl=1;
+        flag_turnr=0;
+        flag_stomp=0;
         abd_multiplier=0;
         //flag_FL_turn=1;
         //flag_BL_turn=1;
@@ -646,6 +673,8 @@ void UART0IntHandler(void)
     if(rxchar[0]=='u'&& startrx==0) // Stomp
     {
         flag_stomp=1;
+        flag_turnl=0;
+        flag_turnr=0;
         abd_multiplier=0;
         flag_cal=0;
         //flag_FL_turn=1;
@@ -662,36 +691,36 @@ void UART0IntHandler(void)
     }
     if(rxchar[0]=='n'&& startrx==0)
     {
-        blxoffset=blxoffset+0.001;
+        blxoffset=blxoffset+0.003;
     }
     if(rxchar[0]=='N'&& startrx==0)
     {
-        blxoffset=blxoffset-0.001;
+        blxoffset=blxoffset-0.003;
     }
     if(rxchar[0]=='m'&& startrx==0)
     {
-        blyoffset=blyoffset+0.001;
+        blyoffset=blyoffset+0.003;
     }
     if(rxchar[0]=='M'&& startrx==0)
     {
-        blyoffset=blyoffset-0.001;
+        blyoffset=blyoffset-0.003;
     }
 
+    if(rxchar[0]=='j'&& startrx==0)
+    {
+        brxoffset=brxoffset+0.003;
+    }
+    if(rxchar[0]=='J'&& startrx==0)
+    {
+        brxoffset=brxoffset-0.003;
+    }
     if(rxchar[0]=='k'&& startrx==0)
     {
-        brxoffset=brxoffset+0.001;
+        bryoffset=bryoffset+0.003;
     }
     if(rxchar[0]=='K'&& startrx==0)
     {
-        brxoffset=brxoffset-0.001;
-    }
-    if(rxchar[0]=='l'&& startrx==0)
-    {
-        bryoffset=bryoffset+0.001;
-    }
-    if(rxchar[0]=='L'&& startrx==0)
-    {
-        bryoffset=bryoffset-0.001;
+        bryoffset=bryoffset-0.003;
     }
 
     if(rxchar[0]=='Z'&& startrx==0) // Commence stand-up sequence
@@ -830,6 +859,7 @@ int main(void)
     float xx,yy;
     float dt=0.0033;
     float temp_calc=0;
+    float bly, bry;
 
     int tempspine1,tempspine2;
 
@@ -919,7 +949,6 @@ int main(void)
     //UARTprintf("Hi\n");
     //bodyOrientation(-(10)*(3.141/180),(-4)*(3.141/180));
 
-
     flag=1;
     del_pos=100;
     while(1)
@@ -979,6 +1008,8 @@ int main(void)
                 //UARTprintf("%d ",timer_count);
                 motor_knee[5] =  reference[5]+ slope*(to_degrees(q3));
                 motor_hip[4] = reference[4] + slope*(to_degrees(q1+3.14));
+                motor_abd[6] = reference[6];
+
 
                 if(yy>-0.04 || yy<-0.245)
                 {
@@ -991,6 +1022,7 @@ int main(void)
                 //UARTprintf("%d ",timer_count);
                 motor_knee[1] =  reference[1] + slope*(-to_degrees(q3));
                 motor_hip[2] = reference[2] - slope*(to_degrees(q1+3.14));
+                motor_abd[3] = reference[3];
 
 
                 if(yy>-0.04 || yy<-0.245)
@@ -1004,6 +1036,7 @@ int main(void)
                 //UARTprintf("%d ",timer_count);
                 motor_knee[11] =  reference[11] + slope*(to_degrees(q3));
                 motor_hip[10] = reference[10] + slope*(to_degrees(q1+3.14));
+                motor_abd[12] = reference[12];
 
 
 
@@ -1018,6 +1051,7 @@ int main(void)
                 //UARTprintf("%d\n",timer_count);
                 motor_knee[7] =  reference[7] + slope*(-to_degrees(q3));
                 motor_hip[8] = reference[8] - slope*(to_degrees(q1+3.14));
+                motor_abd[9] = reference[9];
 
 
                 actpos[5]=setPos(5,motor_knee[5]);
@@ -1026,7 +1060,7 @@ int main(void)
                 actpos[4]=setPos(4,motor_hip[4]);
                 //motor4[ii]=motor_hip[4];
                 SysCtlDelay(del_pos);
-                setPos(6,6100);
+                setPos(6,motor_abd[6]);
                 SysCtlDelay(del_pos);
                 current[4]=getCur(4);
                 SysCtlDelay(del_pos);
@@ -1039,7 +1073,7 @@ int main(void)
                 actpos[2]=setPos(2,motor_hip[2]);
                 //motor2[ii]=motor_hip[2];
                 SysCtlDelay(del_pos);
-                setPos(3,11433);
+                setPos(3,motor_abd[3]);
                 SysCtlDelay(del_pos);
                 current[1]=getCur(1);
                 SysCtlDelay(del_pos);
@@ -1052,7 +1086,7 @@ int main(void)
                 actpos[8]=setPos(8,motor_hip[8]);
                 //motor8[ii]=motor_hip[8];
                 SysCtlDelay(del_pos);
-                setPos(9,11433);
+                setPos(9,motor_abd[9]);
                 SysCtlDelay(del_pos);
                 current[7]=getCur(7);
                 SysCtlDelay(del_pos);
@@ -1065,7 +1099,7 @@ int main(void)
                 actpos[10]=setPos(10,motor_hip[10]);
                 //motor10[ii]=motor_hip[10];
                 SysCtlDelay(del_pos);
-                setPos(12,6100);
+                setPos(12,motor_abd[12]);
                 SysCtlDelay(del_pos);
                 current[10]=getCur(10);
                 SysCtlDelay(del_pos);
@@ -1114,7 +1148,7 @@ int main(void)
                 else if(flag_stomp==1)
                 {
                     xx=0;
-                    yy=FLyt[ii]+0.005;//+0.005;
+                    yy=FLyt[ii]+flyoffset;//+0.005;
                     abd_multiplier=0;
                 }
                 else
@@ -1145,6 +1179,12 @@ int main(void)
                 //UARTprintf("%d ",timer_count);
                 motor_knee[5] =  reference[5]+ slope*(to_degrees(q3));
                 motor_hip[4] = reference[4] + slope*(to_degrees(q1+3.14));
+                if(flag_turnl==1)
+                    motor_abd[6] = (int)(reference[6]+(1698.5)*abduction6t[ii]*abd_multiplier);
+                else if(flag_turnr==1)
+                    motor_abd[6] = reference[6];
+                else
+                    motor_abd[6] = reference[6];
                 //motor5[ii]=motor_knee[5];
                 //motor4[ii]=motor_hip[4];
                 //UARTprintf("%d,%d,",motor_knee[5],motor_hip[4]);
@@ -1167,7 +1207,7 @@ int main(void)
                 else if(flag_stomp==1)
                 {
                     xx=0;
-                    yy=FRyt[ii]+0.005;//+0.005;
+                    yy=FRyt[ii]+fryoffset;//+0.005;
                     abd_multiplier=0;
                 }
                 else
@@ -1195,6 +1235,12 @@ int main(void)
                 //UARTprintf("%d ",timer_count);
                 motor_knee[1] =  reference[1] + slope*(-to_degrees(q3));
                 motor_hip[2] = reference[2] - slope*(to_degrees(q1+3.14));
+                if(flag_turnl==1)
+                    motor_abd[3] = reference[3];
+                else if(flag_turnr==1)
+                    motor_abd[3] = (int)(reference[3]-(1698.5)*abduction6t[ii]*abd_multiplier);
+                else
+                    motor_abd[3] = reference[3];
                 //motor1[ii]=motor_knee[1];
                 //motor2[ii]=motor_hip[2];
                 //UARTprintf("%d,%d,",motor_knee[1],motor_hip[2]);
@@ -1218,12 +1264,12 @@ int main(void)
                 else if(flag_turnr==1)
                 {
                     xx=-0.013;//-0.013;
-                    yy=BRyt[ii]-0.005;//+0.005;
+                    yy=BRyt[ii]+bryoffset;//+0.005;
                 }
                 else if(flag_stomp==1)
                 {
-                    xx=-0.01;
-                    yy=BLyt[ii]-0.005;//+0.005;
+                    xx=0; // TODO: Add this if necessary -0.01;
+                    yy=BLyt[ii]+blyoffset;//+0.005;
                     abd_multiplier=0;
                 }
                 else
@@ -1252,6 +1298,13 @@ int main(void)
                 //UARTprintf("%d ",timer_count);
                 motor_knee[11] =  reference[11] + slope*(to_degrees(q3));
                 motor_hip[10] = reference[10] + slope*(to_degrees(q1+3.14));
+                motor_abd[12] = reference[12];
+                if(flag_turnl==1)
+                    motor_abd[12] = reference[12];
+                else if(flag_turnr==1)
+                    motor_abd[12] = (int)(reference[12]+(1698.5)*abduction9t[ii]*abd_multiplier*2);
+                else
+                    motor_abd[12] = reference[12];
                 //motor11[ii]=motor_knee[11];
                 //motor10[ii]=motor_hip[10];
                 //UARTprintf("%d,%d,",motor_knee[11],motor_hip[10]);
@@ -1280,8 +1333,8 @@ int main(void)
                 }
                 else if(flag_stomp==1)
                 {
-                    xx=-0.01;
-                    yy=BRyt[ii]-0.005;//+0.005;
+                    xx=0; // TODO: Add this if necessary -0.01;
+                    yy=BRyt[ii]+bryoffset;//+0.005;
                     abd_multiplier=0;
                 }
                 else
@@ -1314,6 +1367,12 @@ int main(void)
                 //UARTprintf("%d\n",timer_count);
                 motor_knee[7] =  reference[7] + slope*(-to_degrees(q3));
                 motor_hip[8] = reference[8] - slope*(to_degrees(q1+3.14));
+                if(flag_turnl==1)
+                    motor_abd[9] =(int)(reference[9]-(1698.5)*abduction9t[ii]*abd_multiplier);
+                else if (flag_turnr==1)
+                    motor_abd[9] = reference[9];
+                else
+                    motor_abd[9] = reference[9];
                 //motor7[ii]=motor_knee[7];
                 //motor8[ii]=motor_hip[8];
                 //UARTprintf("%d,%d,\n",motor_knee[7],motor_hip[8]);
@@ -1328,12 +1387,7 @@ int main(void)
                 actpos[4]=setPos(4,motor_hip[4]);
                 //motor4[ii]=motor_hip[4];
                 for(delayf=0;delayf<del_pos;delayf++);
-                if(flag_turnl==1)
-                    setPos(6,(int)(6100+(1698.5)*abduction6t[ii]*abd_multiplier));
-                else if(flag_turnr==1)
-                    setPos(6,6100);
-                else
-                    setPos(6,6100);
+                setPos(6, motor_abd[6]);
                 for(delayf=0;delayf<del_pos;delayf++);
                 current[4]=getCur(4);
                 for(delayf=0;delayf<del_pos;delayf++);
@@ -1347,12 +1401,7 @@ int main(void)
                 actpos[2]=setPos(2,motor_hip[2]);
                 //motor2[ii]=motor_hip[2];
                 for(delayf=0;delayf<del_pos;delayf++);
-                if(flag_turnl==1)
-                    setPos(3,11433);
-                else if(flag_turnr==1)
-                    setPos(3,(int)(11433-(1698.5)*abduction6t[ii]*abd_multiplier));
-                else
-                    setPos(3,11433);
+                setPos(3, motor_abd[3]);
                 //setPos(3,(int)(11433-(1698.5)*abduction3t[ii]));
                 for(delayf=0;delayf<del_pos;delayf++);
                 current[1]=getCur(1);
@@ -1367,12 +1416,7 @@ int main(void)
                 actpos[8]=setPos(8,motor_hip[8]);
                 //motor8[ii]=motor_hip[8];
                 for(delayf=0;delayf<del_pos;delayf++);
-                if(flag_turnl==1)
-                    setPos(9,(int)(11433-(1698.5)*abduction9t[ii]*abd_multiplier));
-                else if (flag_turnr==1)
-                    setPos(9,11350);
-                else
-                    setPos(9,11350);
+                setPos(9, motor_abd[9]);
                 for(delayf=0;delayf<del_pos;delayf++);
                 current[7]=getCur(7);
                 for(delayf=0;delayf<del_pos;delayf++);
@@ -1387,12 +1431,7 @@ int main(void)
                 actpos[10]=setPos(10,motor_hip[10]);
                 //motor10[ii]=motor_hip[10];
                 for(delayf=0;delayf<del_pos;delayf++);
-                if(flag_turnl==1)
-                    setPos(12,6250);
-                else if(flag_turnr==1)
-                    setPos(12,(int)(6100+(1698.5)*abduction9t[ii]*abd_multiplier*2));
-                else
-                    setPos(12,6250);
+                setPos(12, motor_abd[12]);
                 //setPos(12,(int)(6250+(1698.5)*abduction12t[ii]));
                 for(delayf=0;delayf<del_pos;delayf++);
                 current[10]=getCur(10);
@@ -1418,8 +1457,11 @@ int main(void)
                   SysCtlDelay(del_pos);
                   current[14]=getCur(14);*/
 
-                UARTprintf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",ii,motor_knee[1],actpos[1],current[1],motor_hip[2],actpos[2],current[2],current[3],current[4],current[5],current[6],motor_knee[7],actpos[7],current[7],motor_hip[8],actpos[8],current[8],current[9],current[10],current[11],current[12],tempspine1,actpos[13],current[13],tempspine2,actpos[14],current[14]);
+                //UARTprintf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",ii,motor_knee[1],actpos[1],current[1],motor_hip[2],actpos[2],current[2],current[3],current[4],current[5],current[6],motor_knee[7],actpos[7],current[7],motor_hip[8],actpos[8],current[8],current[9],current[10],current[11],current[12],tempspine1,actpos[13],current[13],tempspine2,actpos[14],current[14]);
                 //UARTprintf("%d\n",motor_counter);
+                bly = 1000*blyoffset;
+                bry = 1000*bryoffset;
+                UARTprintf("Offset:: BLy: %d \t BRy: %d \n", (int) bly, (int) bry);
                 ////ii=ii-2;
                 ii=ii-1;
                 if(ii==-1)
