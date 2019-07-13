@@ -68,10 +68,10 @@ volatile float new_period=5;
 // Use this reference
 //volatile float reference[]={0,4300,11000,11433,4300,11000,6100,4300,11000,11433,4300,11000,6100};
 
+//volatile float reference[]={0,4260,11080,11250,4181,11072,6070,4326,11064,11453,4267,11120,6200};
 
-// Testing this reference values:
-// FRab[3]-> outer => --
-volatile float reference[]={0,4260,11080,11250,4181,11072,6070,4326,11064,11453,4267,11120,6200};
+// References for CyPhySS
+volatile float reference[]={0, 4487, 11056, 11250, 4161, 10949, 6200, 4491, 11363, 11450, 4324, 10949, 6300};
 
 inline void enHigh(){GPIOPinWrite(GPIO_PORTB_BASE,GPIO_PIN_5, GPIO_PIN_5);}
 inline void enLow(){GPIOPinWrite(GPIO_PORTB_BASE,GPIO_PIN_5, 0);}
@@ -94,9 +94,9 @@ volatile int flag_turnl=0;
 volatile int flag_stomp=0;
 volatile int loop_delay=0;
 volatile float blxoffset=0;
-volatile float blyoffset=-0.005;// TODO: remove this later if not required
+volatile float blyoffset=0;
 volatile float brxoffset=0;
-volatile float bryoffset=-0.005; // TODO: remove this later if not required
+volatile float bryoffset=0;
 volatile float flyoffset=0;
 volatile float fryoffset=0;
 volatile float flag_cal=0;
